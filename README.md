@@ -2,15 +2,18 @@
 
 A standard for deterministic secure secrets recoverable by a single secret seed.
 
+**Note**: This is an initial draft of the standard.
+
 ## Goals
 
-To make it easy to generate, recover and manage several types of secrets, such
-as passwords, GPG keys, ssh keys, among others.
+- To make it easy to generate, recover and manage several types of secrets, such
+  as passwords, GPG keys, ssh keys, among others.
+- To restore all secrets, if lost, by backing up just the secret seed.
 
 ## Specification
 
-We define a high-level abstract protocol for deterministic secrets derived from
-a single secret seed, without specifying the underlying technologies behind it,
+We define a high-level abstract protocol for deterministic secrets derived  from
+a single secret seed, without specifying the underlying technologies behind  it,
 such as the cryptographic algorithms.
 
 ### Definitions
@@ -18,9 +21,9 @@ such as the cryptographic algorithms.
 - **Seed**: static value used as a source of randomness to derive secrets.
 - **Secret**: value that shall be disclosed only to authorized entities.
 - **Hash**: cryptographically secure hashing algorithm.
-- **Path**: human-readable secret identifier that can used along with seed to
+- **Path**: human-readable secret identifier that can used along  with  seed  to
   derive that secret.
-- **Symbol set**: set of characters used to decode raw data into the desired
+- **Symbol set**: set of characters used to decode raw  data  into  the  desired
   encoding format required by a secret.
 
 ### Algorithm
@@ -55,8 +58,8 @@ Where:
 
 - `version`: the version used in the path standard.
 - `type`: the secret type (i.e, plain text password, ssh key, gpg key).
-- `scope`: the scope to which the secret applies (i.e, company department, internet domain).
-- `specifier`: string precisely identifying the secret within the scope (i.e, username, email)
+- `scope`: the scope to which the secret applies (i.e, company department).
+- `specifier`: precisely specify the secret within the scope (i.e, username)
 
 The scope MAY  represent  an  internet  domain  (i.e,  github.com)  and  secrets
 associates with that domain (passwords, ssh  keys),  in  the  case  the  secrets
@@ -147,3 +150,89 @@ user for backup purposes, it MUST BE presented to  the  user  in  human-readable
 form.
 
 ### EncodeSecret()
+
+The raw data generate by `DeriveRawSecret` must be encoded to match the  require
+format by the secret. For instance, the bits can be converted to an integer  `k`
+representing the secret key of a key pair `(k, kG)` of  a  Elliptic  Curve  with
+generator `G`. It could also be used as an input to a hash-to-point function  in
+order to ensure some properties of the curve are satisfied. A last  example,  is
+to convert the bits into characters to be used  in  a  password.  We  propose  a
+method for the later.
+
+One first idea is to split the `b` bits into chunks representing an integer, and
+map the integer of each chunk to an  element  of  an  array  of  symbols.  After
+encoding the bits into symbols,  the  output  can  be  truncated  to  produce  a
+password with the desired length.
+
+However, we must take into account that nowadays  several  systems  have  strict
+password requirements: must contain both uppercase and lowercase  letters,  must
+have numbers and special characters, must have at least 10  characters, among
+others. Thus, it is possible that our pseudo-random password, derived from the
+random seed, does match these criteria.
+
+To solve it, we propose defining the following symbol sets:
+
+- lower case english letters: a-z
+- upper case english letters: A-Z
+- digits: 0-9
+- special characters: !"#$%&'()*+,./:;<=>?@[\]^_`{|}~
+
+The user selects which characters MUST BE in the generated  password.  The  user
+could select just lower case letters and digits or select all symbol  sets.  The
+`b` bits are split into `n` chunks, whose size in bits MAY vary depending on the
+total number of elements in the symbol set. Each chunk is mapped  to  a  symbol,
+and the output is truncated to match  the  desirable  password  length.  If  the
+output password does not fit, we hash the original input again until it fits it.
+
+Here is a pseudo-code for the proposed algorithm:
+
+```text
+FUNCTION DerivePassword(s: Seed, path: Path)
+    r <- Concatenate(s, path)
+    DO
+        r <- Hash(r)
+        pass <- EncodeSecret(r, path)
+    WHILE NOT MatchCriteria(pass)
+    RETURN pass
+ENDFUNCTION
+
+FUNCTION EncodeSecret(r: RawData, path: Path)
+    IF isPasswordTypePath(path)
+        symbols <- GetSymbolSet()
+        password_length <- GetDesiredPasswordLength()
+        chunks <- Split(r)
+        pass <- ""
+        FOR i FROM 0 TO password_length
+            chunk <- chunks[i]
+            index <- RandomSetIndex(chunk, symbols)
+            pass <- Concatenate(pass, symbols[index])
+        ENDFOR
+        RETURN pass
+    ENDIF
+    ...
+ENDFUNCTION
+
+FUNCTION RandomSetIndex(chunk: RawData, set: Set)
+    integer <- Int(chunk)
+    size <- SetSize(set)
+    index <- set[integer % size]
+    RETURN index
+ENDFUNCTION
+```
+
+The algorithm will re-hash the digest until the generated password  matches  the
+criteria which the user has established, for example, via a  graphical  checkbox
+interface or via command line arguments.
+
+The same approach of re-hashing can be used for  the  algorithm  to  generate  a
+password whose length is within a range: the user specifies a  range,  which  is
+checked inside the `MatchCriteria` function,  and  the  `EncodeSecret`  function
+will pick a random password length based on the current value of `r`.  This  can
+be useful if the user does not want to  specify  the  password  length  to,  for
+example, avoid having all passwords  with  the  same  length,  which  creates  a
+fingerprint and can be used to link user accounts, compromising privacy.
+
+## ROADMAP
+
+- [ ] Finish the draft
+- [ ] Implement a proof-of-concept program
