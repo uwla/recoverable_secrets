@@ -236,3 +236,7 @@ fingerprint and can be used to link user accounts, compromising privacy.
 
 - [ ] Finish the draft
 - [ ] Implement a proof-of-concept program
+
+## LICENSE
+
+MIT.
