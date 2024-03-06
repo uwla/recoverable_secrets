@@ -10,6 +10,12 @@ A standard for deterministic secure secrets recoverable by a single secret seed.
   as passwords, GPG keys, ssh keys, among others.
 - To restore all secrets, if lost, by backing up just the secret seed.
 
+Informally, the goal of the standard is to broaden  the  scope  of  the  already
+established standards defined by BIP-32, BIP-39, BIP-43 and  BIP-44,  which  are
+standards for generating, managing and recovering the keys associated  with  BTC
+addresses. Inspired by them, our goal is to make it more generic to manage other
+types of secrets in different scenarios.
+
 ## Specification
 
 We define a high-level abstract protocol for deterministic secrets derived  from
