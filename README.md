@@ -91,8 +91,10 @@ v1/password/myapp.com/db:app            Password for user app in myapp.com's int
 
 ### DeriveRawSecret()
 
-The `DeriveRawSecret` function outputs `b` bits of raw data on inputs  seed  `s`
-and path `p`.
+The `DeriveRawSecret` function outputs `r_s`, with `b`  bits  of  raw  data,  on
+input seed `s` and path `p`:
+
+$ r_s <- DeriveRawSecret(s, p) $
 
 One simple, straightforward way to implement it is to use concatenate the inputs
 and hash them:
@@ -143,7 +145,7 @@ each level.
 One may point out that  these  extra  password  steps  contradict  the  original
 purpose of the protocol, which aims to derive all secrets from a  single  secret
 seed. This is not a contradiction, because the secrets are still derived from  a
-single seed and can  be  recorded  from  it.  The  introduction  of  additional,
+single seed and can be  recovered  from  it.  The  introduction  of  additional,
 intermediary passwords just reflects the  complex  nature  of  managing  secrets
 within scoped divisions of a large organization. This complexity is intrinsic to
 the problem of trust in human organization, and not a protocol  flaw.  Moreover,
@@ -172,8 +174,8 @@ password with the desired length.
 
 However, we must take into account that nowadays  several  systems  have  strict
 password requirements: must contain both uppercase and lowercase  letters,  must
-have numbers and special characters, must have at least 10  characters, among
-others. Thus, it is possible that our pseudo-random password, derived from the
+have numbers and special characters, must have at  least  10  characters,  among
+others. Thus, it is possible that our pseudo-random password, derived  from  the
 random seed, does match these criteria.
 
 To solve it, we propose defining the following symbol sets:
@@ -237,6 +239,79 @@ will pick a random password length based on the current value of `r`.  This  can
 be useful if the user does not want to  specify  the  password  length  to,  for
 example, avoid having all passwords  with  the  same  length,  which  creates  a
 fingerprint and can be used to link user accounts, compromising privacy.
+
+### Generating Cryptographic Keys
+
+The previous section proposed an encoding scheme for password. This sections
+does the same for cryptographic keys.
+
+Cryptographic algorithms for generating keys, or key pairs, usually  rely  on  a
+source of randomness or pseudo-randomness. In the case of a  personal  computer,
+the source could be the operating system itself,  which  typically  provides  an
+interface for programming  languages  and  high-level  programs  to  get  random
+numbers and bit sequences from the system.
+
+After obtaining the random data from the system, those algorithms would use  the
+random data directly or inputting it into a  pseudo-random  function  and  using
+this function's output -- for example, in a hash-to-point  function  to  convert
+the input bits into a curve's actual point.  Thus,  to  make  deterministic  the
+output of every key generation algorithm we just need to have control  over  the
+seed and random numbers it gets. We want it deterministic in order to be able to
+recover  the  generated  keys  using  only  a  single   secret   seed   and   an
+easy-to-remember human-friendly string identifier -- in our case,  this  is  the
+derivation path.
+
+For every key generation function `f`, which could output a key or key pair,  we
+define `g` as a function which takes as input the same parameters as `f` plus  a
+seed `s` which is used internally to replace every call to  a  Random  Generator
+with a call to a  Pseudo-Random  Generator.  The  implementation  of  `g`  would
+replace every occurrence of a function  that  outputs  random  number  --  using
+external source of randomness -- with function  which  outputs  a  deterministic
+pseudo-random output with the same type as the original function output --  such
+as an integer or byte array. Thus, `g` is a deterministic key generator, whose
+randomness depends on the seed `s`.
+
+We propose that every `g` function uses the seed `r_s` output from the  function
+`DeriveRawSecret()`. That way, all key pairs can  be  derived  deterministically
+using the same algorithm as long as we have  `g`,  which  is  adapted  from  the
+original function algorithm `f` of a particular cryptographic key generator.
+
+The generation of a key whose seed is `s` and path `path`, would look like this:
+
+```text
+r_s <- DeriveRawSecret(s, p)
+rsa_key_pair <- g_rsa(protocol_params_rsa, r_s)
+ecdsa_key_pair <- g_ecdsa(protocol_params_ecdsa, r_s)
+```
+
+Where  `protocol_params_rsa`  and  `protocol_params_ecdsa`  are  fixed,   public
+protocol parameters for RSA and ECDSA -- for example, for RSA it would define  a
+public prime `q`, and for ECDSA a public generator `G`.
+
+The protocol has to define the public parameters, if needed, for each algorithm,
+which  will  be  used  by  all  implementations  of  the  protocol.  The  actual
+implementation of each `g` would be specific to the programming language and the
+program itself, but their output MUST be the same among all clients.
+
+It is then necessary to define each `g` in the protocol. For  RSA,  DSA,  ECDSA,
+Schnorr, El Gamal, Guillou-Quisquater, and many other algorithms and variants to
+generate cryptographic keys, be it for encryption or signature, the  only  steps
+which needed to be modified are those which require obtaining random numbers and
+random bits. For example, in RSA, the private primes `q`  and  `r`  need  to  be
+pseudo-randomly deterministically computed from  `r_s`,  then  `s`,  an  integer
+between `2` and `(q-1)(p-1)`, be also computed deterministically from it.
+
+The rest of  the  cryptographic  remains  intact,  which  means  their  security
+properties  are  not  diminished  or  enhanced.  We  rely  on  `r_s`   being   a
+pseudo-random output of  `b`  bits,  obtained  from  successive  hashes  of  the
+originam random seed `s`.  Thus,  the  actual  randomness  and  entropy  of  the
+generated key pair depends on the entropy of `s`, and on  the  hashing  function
+being used as well as `b`, the number of bits output by the hashing.
+
+This is the abstract protocol definition. The concrete protocol definition needs
+to  specify  those  variables,  the  hashing  functions  to  be  used,  and  the
+mathematical specification of each  `g`  for  each  cryptographic  key  generator
+algorithm.
 
 ## ROADMAP
 
